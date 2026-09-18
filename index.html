@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%93%88</text></svg>">
+<style>
+*{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>台股月線 KD 掃描</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+</head>
+<body>
+<style>
+:root{
+  --ground:#F7F5F4; --surface:#FFFFFF; --surface-2:#FBFAF9;
+  --ink:#1D1917; --ink-2:#4A423D; --muted:#867C76;
+  --line:#E4DFDB; --line-soft:#EFEAE6;
+  --rise:#D33A40; --rise-soft:#F7DEDE;
+  --fall:#0F8C64; --fall-soft:#D8EFE6;
+  --warn:#A96A12; --warn-soft:#F6E9D3;
+  --shadow:0 1px 2px rgba(29,25,23,.06), 0 8px 24px -16px rgba(29,25,23,.28);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#151312; --surface:#1D1A18; --surface-2:#232019;
+    --ink:#F1ECE7; --ink-2:#CFC6BF; --muted:#968C85;
+    --line:#332D2A; --line-soft:#2A2522;
+    --rise:#FF5E62; --rise-soft:#3A1F20;
+    --fall:#2FC28A; --fall-soft:#13302A;
+    --warn:#D69A45; --warn-soft:#332616;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#151312; --surface:#1D1A18; --surface-2:#232019;
+  --ink:#F1ECE7; --ink-2:#CFC6BF; --muted:#968C85;
+  --line:#332D2A; --line-soft:#2A2522;
+  --rise:#FF5E62; --rise-soft:#3A1F20;
+  --fall:#2FC28A; --fall-soft:#13302A;
+  --warn:#D69A45; --warn-soft:#332616;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans","PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px; margin:0 auto; padding-inline:20px; padding-block:28px 56px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums}
+
+/* ── header ── */
+header{display:flex; flex-wrap:wrap; align-items:flex-end; gap:16px 28px; padding-bottom:18px; border-bottom:2px solid var(--ink)}
+.brand h1{margin:0; font-size:26px; font-weight:700; letter-spacing:-.02em; text-wrap:balance}
+.brand p{margin:4px 0 0; color:var(--muted); font-size:13.5px}
+.stamp{margin-left:auto; display:flex; align-items:center; gap:10px}
+.pill{
+  display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px;
+  font-size:12.5px; font-weight:600; letter-spacing:.02em; border:1px solid transparent; white-space:nowrap;
+}
+.pill.live{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 34%,transparent)}
+.pill.done{background:var(--fall-soft); color:var(--fall); border-color:color-mix(in srgb,var(--fall) 34%,transparent)}
+.dot{width:7px; height:7px; border-radius:50%; background:currentColor}
+.pill.live .dot{animation:blink 1.6s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.pill.live .dot{animation:none}}
+
+/* ── 統計列 ── */
+.stats{display:flex; flex-wrap:wrap; gap:0; margin:22px 0 26px; border-block:1px solid var(--line-soft)}
+.stat{padding:13px 26px 13px 0; margin-right:26px; border-right:1px solid var(--line-soft)}
+.stat:last-child{border-right:0; margin-right:0; padding-right:0}
+.stat .k{display:block; font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.stat .v{display:block; font-size:23px; font-weight:600; line-height:1.25; margin-top:3px}
+.stat .v small{font-size:13px; font-weight:400; color:var(--muted); margin-left:3px}
+
+/* ── 工具列 ── */
+.bar{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:14px}
+.bar .lbl{font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-right:4px}
+.chip{
+  appearance:none; cursor:pointer; font:inherit; font-size:13px; font-weight:500;
+  padding:6px 13px; border-radius:7px; border:1px solid var(--line);
+  background:var(--surface); color:var(--ink-2); transition:background .12s, border-color .12s, color .12s;
+}
+.chip:hover{border-color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--ground)}
+.chip:focus-visible,th.sortable:focus-visible{outline:2px solid var(--rise); outline-offset:2px}
+.count{margin-left:auto; font-size:13px; color:var(--muted)}
+
+/* ── 表格 ── */
+.tablewrap{overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow)}
+table{width:100%; border-collapse:collapse; min-width:820px}
+th,td{padding:11px 14px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--line-soft)}
+th:first-child,td:first-child{text-align:left; padding-left:18px}
+td:last-child,th:last-child{padding-right:18px}
+thead th{
+  position:sticky; top:0; z-index:2; background:var(--surface-2);
+  font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+  border-bottom:1px solid var(--line); user-select:none;
+}
+th.sortable{cursor:pointer}
+th.sortable:hover{color:var(--ink)}
+th .arrow{opacity:0; margin-left:4px; font-size:9px}
+th[data-dir] .arrow{opacity:1; color:var(--ink)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-2)}
+
+.sym{display:flex; align-items:baseline; gap:9px}
+.sym .code{font-size:14.5px; font-weight:600; letter-spacing:.01em}
+.sym .name{font-size:14.5px; font-weight:500}
+.tag{font-size:10.5px; font-weight:600; padding:2px 6px; border-radius:4px; letter-spacing:.04em; border:1px solid var(--line); color:var(--muted); background:var(--surface-2)}
+.tag.warn{color:var(--warn); background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.tag.wl{color:var(--fall); background:var(--fall-soft); border-color:color-mix(in srgb,var(--fall) 32%,transparent)}
+.tag.new{color:var(--rise); background:var(--rise-soft); border-color:color-mix(in srgb,var(--rise) 32%,transparent)}
+.price{font-size:15px; font-weight:600}
+.up{color:var(--rise)} .down{color:var(--fall)}
+
+/* 乖離微條：0 為中線，右紅左綠 */
+.dev{display:inline-grid; grid-template-columns:1fr 1fr; align-items:center; width:104px; gap:0; vertical-align:middle}
+.dev i{display:block; height:5px; border-radius:2px}
+.dev .l{justify-self:end; background:var(--fall)}
+.dev .r{justify-self:start; background:var(--rise)}
+.devcell{display:flex; align-items:center; justify-content:flex-end; gap:10px}
+.devcell .n{min-width:52px}
+
+.cross{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600;
+  background:var(--rise-soft); color:var(--rise); border:1px solid color-mix(in srgb,var(--rise) 30%,transparent)}
+.kd .k{font-weight:600}
+.kd .sep{color:var(--muted); margin:0 3px}
+.dim{color:var(--muted)}
+
+/* ── 手機卡片版 ── */
+.cards{display:none; flex-direction:column; gap:10px}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px 15px}
+.card .top{display:flex; align-items:baseline; gap:7px; flex-wrap:wrap}
+.card .top .code{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace; font-size:15px; font-weight:600}
+.card .top .name{font-size:15px; font-weight:600}
+.card .px{margin-left:auto; font-size:17px; font-weight:600; font-variant-numeric:tabular-nums}
+.card .grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; margin-top:12px; padding-top:11px; border-top:1px solid var(--line-soft)}
+.card .cell .k{display:block; font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.card .cell .v{display:block; font-size:14.5px; font-weight:600; margin-top:2px}
+.card .sig{margin-top:12px}
+.sortsel{
+  display:none; appearance:none; font:inherit; font-size:13px; font-weight:500; cursor:pointer;
+  padding:6px 26px 6px 12px; border-radius:7px; border:1px solid var(--line);
+  background:var(--surface) no-repeat right 9px center; color:var(--ink);
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-size:5px 5px,5px 5px; background-position:right 13px center,right 9px center;
+}
+.sortsel:focus-visible{outline:2px solid var(--rise); outline-offset:2px}
+
+/* ── PIN 解鎖畫面 ── */
+.gate{position:fixed; inset:0; z-index:50; display:none; place-items:center; background:var(--ground); padding:24px}
+.gate.on{display:grid}
+.gate form{width:100%; max-width:296px; text-align:center}
+.gate .mark{font-size:32px; line-height:1}
+.gate h2{margin:14px 0 4px; font-size:19px; font-weight:700; letter-spacing:-.01em}
+.gate p{margin:0 0 20px; font-size:13.5px; color:var(--muted)}
+.gate input{
+  width:100%; font:inherit; font-size:19px; text-align:center; letter-spacing:.22em;
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  padding:11px 13px; border-radius:9px; border:1px solid var(--line);
+  background:var(--surface); color:var(--ink);
+}
+.gate input:focus{outline:2px solid var(--ink); outline-offset:1px; border-color:transparent}
+.gate button{
+  width:100%; margin-top:10px; font:inherit; font-size:14.5px; font-weight:600; cursor:pointer;
+  padding:11px; border-radius:9px; border:1px solid var(--ink); background:var(--ink); color:var(--ground);
+}
+.gate .err{margin:11px 0 0; font-size:13px; color:var(--rise); min-height:1.2em}
+.gate.shake form{animation:shake .32s}
+@keyframes shake{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+@media (prefers-reduced-motion:reduce){.gate.shake form{animation:none}}
+body.locked .wrap{display:none}
+
+/* ── 說明 ── */
+.notes{margin-top:30px; display:grid; grid-template-columns:repeat(auto-fit,minmax(248px,1fr)); gap:26px 34px}
+.notes section h2{margin:0 0 7px; font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.notes p,.notes li{margin:0 0 6px; font-size:13.5px; color:var(--ink-2); line-height:1.6}
+.notes ul{margin:0; padding-left:17px}
+.disclaim{margin-top:28px; padding:13px 16px; border-left:3px solid var(--warn); background:var(--warn-soft); color:var(--ink-2); font-size:13px; border-radius:0 7px 7px 0}
+.disclaim strong{color:var(--ink)}
+footer{margin-top:26px; padding-top:14px; border-top:1px solid var(--line-soft); color:var(--muted); font-size:12.5px}
+
+@media (max-width:640px){
+  .tablewrap{display:none}
+  .cards{display:flex}
+  .sortsel{display:block}
+  .wrap{padding-block:22px 44px}
+  .brand h1{font-size:21px}
+  .stamp{margin-left:0; width:100%}
+  .stat{padding-right:18px; margin-right:18px}
+  .stat .v{font-size:19px}
+  .count{width:100%; margin-left:0; text-align:right}
+}
+</style>
+
+<div class="gate" id="gate">
+  <form id="gateform" autocomplete="off">
+    <div class="mark" aria-hidden="true">📈</div>
+    <h2>台股月線 KD 掃描</h2>
+    <p>請輸入 PIN 碼</p>
+    <input type="password" id="pin" inputmode="numeric" maxlength="20" aria-label="PIN 碼" autocomplete="current-password">
+    <button type="submit">解鎖</button>
+    <p class="err" id="gateerr" role="alert"></p>
+  </form>
+</div>
+
+<script>
+/* PIN 只在 GitHub Pages 上啟用；Artifact 版本已靠 Claude 帳號保護，不重複擋 */
+const PIN = "love5168";
+const NEED_PIN = location.hostname.endsWith("github.io");
+const KEY = "tws_ok";
+
+function unlock() {
+  document.body.classList.remove("locked");
+  document.getElementById("gate").classList.remove("on");
+}
+if (NEED_PIN) {
+  let ok = false;
+  try { ok = localStorage.getItem(KEY) === "1"; } catch (e) { ok = false; }
+  if (!ok) {
+    document.body.classList.add("locked");
+    document.getElementById("gate").classList.add("on");
+    setTimeout(() => document.getElementById("pin").focus(), 60);
+  }
+}
+document.getElementById("gateform").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const el = document.getElementById("pin");
+  const gate = document.getElementById("gate");
+  if (el.value === PIN) {
+    try { localStorage.setItem(KEY, "1"); } catch (err) {}
+    unlock();
+  } else {
+    document.getElementById("gateerr").textContent = "PIN 碼不正確";
+    gate.classList.add("shake");
+    setTimeout(() => gate.classList.remove("shake"), 340);
+    el.value = "";
+    el.focus();
+  }
+});
+</script>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>台股月線 KD 掃描</h1>
+      <p>月線與季線同步上揚、KD 落在低檔的觀察名單</p>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="bar">
+    <span class="lbl">篩選</span>
+    <button class="chip" id="f-all" data-filter="all" aria-pressed="true">全部</button>
+    <button class="chip" id="f-cross" data-filter="cross" aria-pressed="false">今日黃金交叉</button>
+    <button class="chip" id="f-new" data-filter="new" aria-pressed="false">新進榜</button>
+    <button class="chip" id="f-twse" data-filter="上市" aria-pressed="false">上市</button>
+    <button class="chip" id="f-tpex" data-filter="上櫃" aria-pressed="false">上櫃</button>
+    <select class="sortsel" id="sortsel" aria-label="排序方式">
+      <option value="月線5日斜率%|-1">月線斜率　高 → 低</option>
+      <option value="距月線乖離%|1">距月線乖離　低 → 高</option>
+      <option value="K|1">K 值　低 → 高</option>
+      <option value="20日均量(張)|-1">20 日均量　大 → 小</option>
+      <option value="收盤|-1">收盤價　高 → 低</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="sortable" data-key="代號" data-type="text" tabindex="0">個股<span class="arrow">▼</span></th>
+          <th class="sortable" data-key="收盤" tabindex="0">收盤<span class="arrow">▼</span></th>
+          <th class="sortable" data-key="距月線乖離%" tabindex="0">距月線乖離<span class="arrow">▼</span></th>
+          <th class="sortable" data-key="月線5日斜率%" tabindex="0">月線斜率<span class="arrow">▼</span></th>
+          <th class="sortable" data-key="季線5日斜率%" tabindex="0">季線斜率<span class="arrow">▼</span></th>
+          <th class="sortable" data-key="K" tabindex="0">K / D<span class="arrow">▼</span></th>
+          <th class="sortable" data-key="20日均量(張)" tabindex="0">20日均量<span class="arrow">▼</span></th>
+          <th>訊號</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="notes">
+    <section>
+      <h2>篩選條件</h2>
+      <ul>
+        <li>MA20 今日高於 5 個交易日前，且不低於昨日</li>
+        <li>MA60（季線）今日高於 5 個交易日前</li>
+        <li>KD 的 K 值落在 12 – 28（低檔區）</li>
+        <li>20 日均量 ≥ 500 張，排除 00 開頭 ETF</li>
+      </ul>
+    </section>
+    <section>
+      <h2>怎麼讀這張表</h2>
+      <p><span class="up">紅</span>為正、<span class="down">綠</span>為負，依台股慣例。乖離為負代表股價已回到月線之下，是這套條件想抓的回檔位置。</p>
+      <p>K 低於 D 表示 KD 仍在下彎，尚未翻正；「今日黃金交叉」是 K 在今天剛站回 D 之上。</p>
+    </section>
+    <section>
+      <h2>資料來源</h2>
+      <p>個股清單取自證交所與櫃買中心 OpenAPI（只含今天仍在交易的代號），日線由 Yahoo Finance 提供，取近 6 個月。KD 採台灣慣用 9 日 RSV、K 與 D 各取 1/3 權重，與 tw-stock-advisor 因子 5 共用同一份公式。</p>
+    </section>
+    <section>
+      <h2>這份名單之後怎麼用</h2>
+      <p>標<span class="tag wl">觀察名單</span>的已經在 tw-stock-advisor 裡受完整評分（殖利率、本益比、安全邊際、籌碼、總經）。其餘是純線型的候選，要研究就加進觀察名單，讓因子 1～12 跑一次。</p>
+    </section>
+  </div>
+
+  <div class="disclaim">
+    <strong>這是候選名單，不是買賣建議。</strong>條件全屬技術面，完全沒有看基本面——財報、產業、消息面都不在內。名稱帶 <span class="tag warn">*</span> 為交易所標示的警示股。本頁為個人研究輔助，不構成投資建議；所有交易決策與下單動作均須由使用者本人手動完成。
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const META = {"rows": [{"代號": "3219", "名稱": "倚強科", "市場": "上櫃", "收盤": 89.8, "MA20": 86.0, "月線5日斜率%": 4.17, "距月線乖離%": 4.42, "MA60": 74.87, "季線5日斜率%": 1.42, "站上季線": "✓", "K": 23.9, "D": 22.7, "今日KD黃金交叉": "✓", "K>D": "✓", "20日均量(張)": 841, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "8085", "名稱": "福華", "市場": "上櫃", "收盤": 14.4, "MA20": 14.86, "月線5日斜率%": 3.63, "距月線乖離%": -3.08, "MA60": 12.7, "季線5日斜率%": 1.35, "站上季線": "✓", "K": 20.2, "D": 20.2, "今日KD黃金交叉": "✓", "K>D": "✓", "20日均量(張)": 713, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "3008", "名稱": "大立光", "市場": "上市", "收盤": 6430.0, "MA20": 6655.0, "月線5日斜率%": 2.85, "距月線乖離%": -3.38, "MA60": 5107.92, "季線5日斜率%": 1.91, "站上季線": "✓", "K": 25.8, "D": 22.9, "今日KD黃金交叉": "✓", "K>D": "✓", "20日均量(張)": 2261, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "2301", "名稱": "光寶科", "市場": "上市", "收盤": 282.0, "MA20": 293.75, "月線5日斜率%": 0.86, "距月線乖離%": -4.0, "MA60": 250.95, "季線5日斜率%": 2.04, "站上季線": "✓", "K": 21.0, "D": 18.2, "今日KD黃金交叉": "✓", "K>D": "✓", "20日均量(張)": 28385, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "5314", "名稱": "世紀*", "市場": "上櫃", "收盤": 30.5, "MA20": 35.1, "月線5日斜率%": 8.12, "距月線乖離%": -13.09, "MA60": 22.09, "季線5日斜率%": 7.32, "站上季線": "✓", "K": 19.7, "D": 34.7, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 18503, "資料日期": "2026-09-18", "警示": true, "已在觀察名單": false, "新進榜": false}, {"代號": "4939", "名稱": "亞電", "市場": "上櫃", "收盤": 78.3, "MA20": 83.24, "月線5日斜率%": 5.47, "距月線乖離%": -5.93, "MA60": 68.13, "季線5日斜率%": 2.27, "站上季線": "✓", "K": 17.8, "D": 24.9, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 16436, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "6141", "名稱": "柏承", "市場": "上市", "收盤": 49.85, "MA20": 51.8, "月線5日斜率%": 3.27, "距月線乖離%": -3.76, "MA60": 42.16, "季線5日斜率%": 2.24, "站上季線": "✓", "K": 23.6, "D": 25.6, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 3786, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "6547", "名稱": "高端疫苗", "市場": "上櫃", "收盤": 59.7, "MA20": 61.31, "月線5日斜率%": 3.01, "距月線乖離%": -2.63, "MA60": 52.67, "季線5日斜率%": 2.3, "站上季線": "✓", "K": 23.4, "D": 27.2, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 6802, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "3363", "名稱": "上詮", "市場": "上櫃", "收盤": 683.0, "MA20": 697.45, "月線5日斜率%": 2.51, "距月線乖離%": -2.07, "MA60": 613.95, "季線5日斜率%": 0.2, "站上季線": "✓", "K": 19.8, "D": 19.8, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 4930, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "6640", "名稱": "均華", "市場": "上櫃", "收盤": 1180.0, "MA20": 1136.65, "月線5日斜率%": 2.46, "距月線乖離%": 3.81, "MA60": 1027.48, "季線5日斜率%": 0.68, "站上季線": "✓", "K": 27.8, "D": 32.4, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 562, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "6727", "名稱": "亞泰金屬", "市場": "上櫃", "收盤": 487.0, "MA20": 510.9, "月線5日斜率%": 1.28, "距月線乖離%": -4.68, "MA60": 442.02, "季線5日斜率%": 0.75, "站上季線": "✓", "K": 14.2, "D": 16.8, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 1603, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "2201", "名稱": "裕隆", "市場": "上市", "收盤": 29.6, "MA20": 30.07, "月線5日斜率%": 0.97, "距月線乖離%": -1.56, "MA60": 28.75, "季線5日斜率%": 0.83, "站上季線": "✓", "K": 23.5, "D": 32.0, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 4856, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "2465", "名稱": "麗臺", "市場": "上市", "收盤": 91.6, "MA20": 94.09, "月線5日斜率%": 0.79, "距月線乖離%": -2.65, "MA60": 85.77, "季線5日斜率%": 1.28, "站上季線": "✓", "K": 15.9, "D": 18.3, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 3904, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "6669", "名稱": "緯穎", "市場": "上市", "收盤": 2140.0, "MA20": 2336.16, "月線5日斜率%": 0.66, "距月線乖離%": -8.4, "MA60": 2011.2, "季線5日斜率%": 2.84, "站上季線": "✓", "K": 14.3, "D": 17.6, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 4349, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "3023", "名稱": "信邦", "市場": "上市", "收盤": 327.5, "MA20": 323.15, "月線5日斜率%": 0.42, "距月線乖離%": 1.35, "MA60": 316.07, "季線5日斜率%": 0.05, "站上季線": "✓", "K": 25.5, "D": 26.7, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 855, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "1712", "名稱": "興農", "市場": "上市", "收盤": 40.05, "MA20": 40.2, "月線5日斜率%": 0.31, "距月線乖離%": -0.37, "MA60": 39.64, "季線5日斜率%": 0.17, "站上季線": "✓", "K": 23.7, "D": 31.0, "今日KD黃金交叉": "", "K>D": "", "20日均量(張)": 1177, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}, {"代號": "2392", "名稱": "正崴", "市場": "上市", "收盤": 41.95, "MA20": 43.86, "月線5日斜率%": 0.2, "距月線乖離%": -4.36, "MA60": 39.56, "季線5日斜率%": 0.61, "站上季線": "✓", "K": 25.3, "D": 21.5, "今日KD黃金交叉": "", "K>D": "✓", "20日均量(張)": 4270, "資料日期": "2026-09-18", "警示": false, "已在觀察名單": false, "新進榜": false}], "dataDate": "2026-09-18", "generated": "2026-09-19 07:12", "closed": true, "source": "tw-stock-advisor · 掃描 1966/1970 檔"};
+const rows = META.rows;
+const $ = (s) => document.querySelector(s);
+const fmt = (n, d = 2) => n.toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+const sign = (n) => (n > 0 ? "up" : n < 0 ? "down" : "dim");
+
+/* 頁首時點徽章 */
+$("#stamp").innerHTML = META.closed
+  ? '<span class="pill done"><span class="dot"></span>收盤資料</span><span class="dim mono">' + META.dataDate + '</span>'
+  : '<span class="pill live"><span class="dot"></span>盤中資料 · 尚未收盤</span><span class="dim mono">' + META.dataDate + '</span>';
+
+/* 統計 */
+const crosses = rows.filter((r) => r["今日KD黃金交叉"]).length;
+const above = rows.filter((r) => r["站上季線"]).length;
+const fresh = rows.filter((r) => r["新進榜"]).length;
+const stats = [
+  ["符合條件", rows.length, "檔"],
+  ["今日黃金交叉", crosses, "檔"],
+  ["今日新進榜", fresh, "檔"],
+  ["最低 K 值", Math.min(...rows.map((r) => r.K)).toFixed(1), ""],
+];
+$("#stats").innerHTML = stats.map(([k, v, u]) =>
+  '<div class="stat"><span class="k">' + k + '</span><span class="v mono">' + v + (u ? '<small>' + u + '</small>' : '') + '</span></div>'
+).join("");
+
+/* 乖離微條：以名單中最大絕對乖離為滿格 */
+const maxDev = Math.max(...rows.map((r) => Math.abs(r["距月線乖離%"])), 1);
+function devBar(v) {
+  const w = (Math.abs(v) / maxDev) * 100;
+  return '<span class="dev" aria-hidden="true">' +
+    '<i class="l" style="width:' + (v < 0 ? w : 0) + '%"></i>' +
+    '<i class="r" style="width:' + (v > 0 ? w : 0) + '%"></i></span>';
+}
+
+let filter = "all";
+let sortKey = "月線5日斜率%";
+let sortDir = -1;
+let sortType = "num";
+
+function view() {
+  let out = rows.slice();
+  if (filter === "cross") out = out.filter((r) => r["今日KD黃金交叉"]);
+  else if (filter === "new") out = out.filter((r) => r["新進榜"]);
+  else if (filter !== "all") out = out.filter((r) => r["市場"] === filter);
+  out.sort((a, b) => {
+    const x = a[sortKey], y = b[sortKey];
+    return sortType === "text" ? String(x).localeCompare(String(y)) * sortDir : (x - y) * sortDir;
+  });
+  return out;
+}
+
+function render() {
+  const list = view();
+  $("#tbody").innerHTML = list.map((r) => {
+    const dev = r["距月線乖離%"];
+    return '<tr>' +
+      '<td><span class="sym"><span class="code mono">' + r["代號"] + '</span>' +
+        '<span class="name">' + r["名稱"] + '</span>' +
+        '<span class="tag">' + r["市場"] + '</span>' +
+        (r["警示"] ? '<span class="tag warn">警示</span>' : '') +
+        (r["新進榜"] ? '<span class="tag new">新進榜</span>' : '') +
+        (r["已在觀察名單"] ? '<span class="tag wl">觀察名單</span>' : '') + '</span></td>' +
+      '<td class="mono price">' + fmt(r["收盤"]) + '</td>' +
+      '<td><span class="devcell"><span class="mono n ' + sign(dev) + '">' + (dev > 0 ? "+" : "") + fmt(dev) + '%</span>' + devBar(dev) + '</span></td>' +
+      '<td class="mono up">+' + fmt(r["月線5日斜率%"]) + '%</td>' +
+      '<td class="mono up">+' + fmt(r["季線5日斜率%"]) + '%</td>' +
+      '<td class="mono kd"><span class="k">' + r["K"].toFixed(1) + '</span><span class="sep">/</span>' +
+        '<span class="dim">' + r["D"].toFixed(1) + '</span></td>' +
+      '<td class="mono">' + r["20日均量(張)"].toLocaleString("en-US") + '</td>' +
+      '<td>' + (r["今日KD黃金交叉"] ? '<span class="cross">黃金交叉</span>'
+             : r["K>D"] ? '<span class="dim">K &gt; D</span>' : '<span class="dim">KD 待轉</span>') + '</td>' +
+      '</tr>';
+  }).join("");
+  $("#cards").innerHTML = list.map((r) => {
+    const dev = r["距月線乖離%"];
+    const sig = r["今日KD黃金交叉"] ? '<span class="cross">黃金交叉</span>'
+              : r["K>D"] ? '<span class="dim">K &gt; D</span>' : '<span class="dim">KD 待轉</span>';
+    const cell = (k, v) => '<span class="cell"><span class="k">' + k + '</span><span class="v mono">' + v + '</span></span>';
+    return '<article class="card">' +
+      '<div class="top"><span class="code">' + r["代號"] + '</span>' +
+        '<span class="name">' + r["名稱"] + '</span>' +
+        '<span class="tag">' + r["市場"] + '</span>' +
+        (r["警示"] ? '<span class="tag warn">警示</span>' : '') +
+        (r["新進榜"] ? '<span class="tag new">新進榜</span>' : '') +
+        (r["已在觀察名單"] ? '<span class="tag wl">觀察名單</span>' : '') +
+        '<span class="px">' + fmt(r["收盤"]) + '</span></div>' +
+      '<div class="grid">' +
+        cell("距月線乖離", '<span class="' + sign(dev) + '">' + (dev > 0 ? "+" : "") + fmt(dev) + '%</span>') +
+        cell("K / D", r["K"].toFixed(1) + ' <span class="dim">/ ' + r["D"].toFixed(1) + '</span>') +
+        cell("月線斜率", '<span class="up">+' + fmt(r["月線5日斜率%"]) + '%</span>') +
+        cell("季線斜率", '<span class="up">+' + fmt(r["季線5日斜率%"]) + '%</span>') +
+        cell("20 日均量", r["20日均量(張)"].toLocaleString("en-US") + ' <span class="dim">張</span>') +
+        cell("站上季線", r["站上季線"] ? "是" : '<span class="dim">否</span>') +
+      '</div>' +
+      '<div class="sig">' + sig + '</div>' +
+      '</article>';
+  }).join("");
+  $("#count").textContent = "顯示 " + list.length + " / " + rows.length + " 檔";
+}
+
+document.querySelectorAll(".chip").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    filter = btn.dataset.filter;
+    document.querySelectorAll(".chip").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+    render();
+  });
+});
+
+$("#sortsel").addEventListener("change", (e) => {
+  const [k, d] = e.target.value.split("|");
+  sortKey = k; sortDir = Number(d); sortType = "num";
+  render();
+});
+
+function applySort(th) {
+  const key = th.dataset.key;
+  if (key === sortKey) sortDir *= -1;
+  else { sortKey = key; sortType = th.dataset.type || "num"; sortDir = sortType === "text" ? 1 : -1; }
+  document.querySelectorAll("th.sortable").forEach((h) => h.removeAttribute("data-dir"));
+  th.dataset.dir = sortDir > 0 ? "asc" : "desc";
+  th.querySelector(".arrow").textContent = sortDir > 0 ? "▲" : "▼";
+  render();
+}
+document.querySelectorAll("th.sortable").forEach((th) => {
+  th.addEventListener("click", () => applySort(th));
+  th.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); applySort(th); }
+  });
+});
+
+$("#foot").textContent = "掃描時間 " + META.generated + "　·　來源檔 " + META.source +
+  "　·　由 tw_stock_scan.py 產生，共掃描上市櫃約 1,970 檔";
+
+render();
+</script>
+
+</body>
+</html>
